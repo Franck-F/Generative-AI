@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from datetime import timedelta
 from random import randint
-from subprocess import Popen
+import subprocess
 import sys
 
 
@@ -17,8 +17,12 @@ def main(def_args=sys.argv[1:]):
     user_email = args.user_email
     if repository is not None:
         start = repository.rfind('/') + 1
+        # Handle cases where the URL might not end in .git
         end = repository.rfind('.')
-        directory = repository[start:end]
+        if end == -1 or end <= start:
+             directory = repository[start:]
+        else:
+             directory = repository[start:end]
     no_weekends = args.no_weekends
     frequency = args.frequency
     days_before = args.days_before
@@ -27,7 +31,9 @@ def main(def_args=sys.argv[1:]):
     days_after = args.days_after
     if days_after < 0:
         sys.exit('days_after must not be negative')
-    os.mkdir(directory)
+    
+    if not os.path.exists(directory):
+        os.mkdir(directory)
     os.chdir(directory)
     run(['git', 'init', '-b', 'main'])
 
@@ -39,7 +45,7 @@ def main(def_args=sys.argv[1:]):
 
     start_date = curr_date.replace(hour=20, minute=0) - timedelta(days_before)
     for day in (start_date + timedelta(n) for n
-                in range(days_before + days_after)):
+                in range(days_before + days_after + 1)):
         if (not no_weekends or day.weekday() < 5) \
                 and randint(0, 100) < frequency:
             for commit_time in (day + timedelta(minutes=m)
@@ -51,8 +57,7 @@ def main(def_args=sys.argv[1:]):
         run(['git', 'branch', '-M', 'main'])
         run(['git', 'push', '-u', 'origin', 'main'])
 
-    print('\nRepository generation ' +
-          '\x1b[6;30;42mcompleted successfully\x1b[0m!')
+    print('\nRepository generation completed successfully!')
 
 
 def contribute(date):
@@ -64,7 +69,7 @@ def contribute(date):
 
 
 def run(commands):
-    Popen(commands).wait()
+    subprocess.run(commands, check=True)
 
 
 def message(date):
@@ -95,7 +100,7 @@ def arguments(argsval):
     parser.add_argument('-fr', '--frequency', type=int, default=80,
                         required=False, help="""Percentage of days when the
                         script performs commits. If N is specified, the script
-                        will commit N%% of days in a year. The default value
+                        will commit N% of days in a year. The default value
                         is 80.""")
     parser.add_argument('-r', '--repository', type=str, required=False,
                         help="""A link on an empty non-initialized remote git
