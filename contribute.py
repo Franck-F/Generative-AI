@@ -8,6 +8,13 @@ import subprocess
 import sys
 
 
+def parse_date(date_str):
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        sys.exit(f"Error: Invalid date format for '{date_str}'. Use YYYY-MM-DD.")
+
+
 def main(def_args=sys.argv[1:]):
     args = arguments(def_args)
     curr_date = datetime.now()
@@ -17,21 +24,27 @@ def main(def_args=sys.argv[1:]):
     user_email = args.user_email
     if repository is not None:
         start = repository.rfind('/') + 1
-        # Handle cases where the URL might not end in .git
         end = repository.rfind('.')
         if end == -1 or end <= start:
-             directory = repository[start:]
+            directory = repository[start:]
         else:
-             directory = repository[start:end]
+            directory = repository[start:end]
     no_weekends = args.no_weekends
     frequency = args.frequency
-    days_before = args.days_before
-    if days_before < 0:
-        sys.exit('days_before must not be negative')
-    days_after = args.days_after
-    if days_after < 0:
-        sys.exit('days_after must not be negative')
-    
+
+    if args.start_date:
+        start_date = parse_date(args.start_date).replace(hour=20, minute=0)
+    else:
+        start_date = curr_date.replace(hour=20, minute=0) - timedelta(args.days_before)
+
+    if args.end_date:
+        end_date = parse_date(args.end_date).replace(hour=20, minute=0)
+    else:
+        end_date = curr_date.replace(hour=20, minute=0) + timedelta(args.days_after)
+
+    if start_date > end_date:
+        sys.exit('Error: start_date must be before end_date')
+
     if not os.path.exists(directory):
         os.mkdir(directory)
     os.chdir(directory)
@@ -43,9 +56,9 @@ def main(def_args=sys.argv[1:]):
     if user_email is not None:
         run(['git', 'config', 'user.email', user_email])
 
-    start_date = curr_date.replace(hour=20, minute=0) - timedelta(days_before)
-    for day in (start_date + timedelta(n) for n
-                in range(days_before + days_after + 1)):
+    delta = end_date - start_date
+    for n in range(delta.days + 1):
+        day = start_date + timedelta(days=n)
         if (not no_weekends or day.weekday() < 5) \
                 and randint(0, 100) < frequency:
             for commit_time in (day + timedelta(minutes=m)
@@ -57,6 +70,8 @@ def main(def_args=sys.argv[1:]):
         run(['git', 'branch', '-M', 'main'])
         run(['git', 'push', '-u', 'origin', 'main'])
 
+    # Return to original directory to avoid test issues
+    os.chdir('..')
     print('\nRepository generation completed successfully!')
 
 
@@ -69,7 +84,7 @@ def contribute(date):
 
 
 def run(commands):
-    subprocess.run(commands, check=True)
+    subprocess.run(commands, check=True, capture_output=True)
 
 
 def message(date):
@@ -78,8 +93,8 @@ def message(date):
 
 def contributions_per_day(args):
     max_c = args.max_commits
-    if max_c > 20:
-        max_c = 20
+    if max_c > 120:
+        max_c = 120
     if max_c < 1:
         max_c = 1
     return randint(1, max_c)
@@ -93,39 +108,35 @@ def arguments(argsval):
     parser.add_argument('-mc', '--max_commits', type=int, default=10,
                         required=False, help="""Defines the maximum amount of
                         commits a day the script can make. Accepts a number
-                        from 1 to 20. If N is specified the script commits
+                        from 1 to 120. If N is specified the script commits
                         from 1 to N times a day. The exact number of commits
                         is defined randomly for each day. The default value
                         is 10.""")
     parser.add_argument('-fr', '--frequency', type=int, default=80,
                         required=False, help="""Percentage of days when the
                         script performs commits. If N is specified, the script
-                        will commit N% of days in a year. The default value
+                        will commit N%% of days in a year. The default value
                         is 80.""")
     parser.add_argument('-r', '--repository', type=str, required=False,
-                        help="""A link on an empty non-initialized remote git
-                        repository. If specified, the script pushes the changes
-                        to the repository. The link is accepted in SSH or HTTPS
-                        format. For example: git@github.com:user/repo.git or
-                        https://github.com/user/repo.git""")
+                        help="""A link on an empty remote git repository.""")
     parser.add_argument('-un', '--user_name', type=str, required=False,
-                        help="""Overrides user.name git config.
-                        If not specified, the global config is used.""")
+                        help="""Overrides user.name git config.""")
     parser.add_argument('-ue', '--user_email', type=str, required=False,
-                        help="""Overrides user.email git config.
-                        If not specified, the global config is used.""")
+                        help="""Overrides user.email git config.""")
     parser.add_argument('-db', '--days_before', type=int, default=365,
                         required=False, help="""Specifies the number of days
                         before the current date when the script will start
-                        adding commits. For example: if it is set to 30 the
-                        first commit date will be the current date minus 30
-                        days.""")
+                        adding commits.""")
     parser.add_argument('-da', '--days_after', type=int, default=0,
                         required=False, help="""Specifies the number of days
                         after the current date until which the script will be
-                        adding commits. For example: if it is set to 30 the
-                        last commit will be on a future date which is the
-                        current date plus 30 days.""")
+                        adding commits.""")
+    parser.add_argument('-sd', '--start_date', type=str, required=False,
+                        help="""Explicit start date in YYYY-MM-DD format.
+                        Overrides --days_before.""")
+    parser.add_argument('-ed', '--end_date', type=str, required=False,
+                        help="""Explicit end date in YYYY-MM-DD format.
+                        Overrides --days_after.""")
     return parser.parse_args(argsval)
 
 

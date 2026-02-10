@@ -9,11 +9,11 @@ class TestContribute(unittest.TestCase):
         args = contribute.arguments(['-nw'])
         self.assertTrue(args.no_weekends)
         self.assertEqual(args.max_commits, 10)
-        self.assertTrue(1 <= contribute.contributions_per_day(args) <= 20)
+        self.assertTrue(1 <= contribute.contributions_per_day(args) <= 120)
 
     def test_contributions_per_day(self):
         args = contribute.arguments(['-nw'])
-        self.assertTrue(1 <= contribute.contributions_per_day(args) <= 20)
+        self.assertTrue(1 <= contribute.contributions_per_day(args) <= 120)
 
     def test_commits(self):
         # The script creates a directory and runs git, so we need to be careful.
